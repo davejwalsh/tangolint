@@ -161,6 +161,30 @@ class PyTangoLinter(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
 
+import re
+
+
+def _parse_noqa(source: str) -> dict[int, set[str] | None]:
+    """Parse ``# noqa`` annotations from *source*.
+
+    Returns a dict mapping 1-based line numbers to either:
+    - ``None``        — suppress **all** issues on that line (bare ``# noqa``)
+    - ``set[str]``    — suppress only the listed codes  (``# noqa: T023, G001``)
+    """
+    noqa: dict[int, set[str] | None] = {}
+    pattern = re.compile(r"#\s*noqa(?::\s*([A-Z0-9,\s]+))?", re.IGNORECASE)
+    for lineno, line in enumerate(source.splitlines(), start=1):
+        m = pattern.search(line)
+        if not m:
+            continue
+        if m.group(1):
+            codes = {c.strip().upper() for c in m.group(1).split(",") if c.strip()}
+            noqa[lineno] = codes
+        else:
+            noqa[lineno] = None  # bare # noqa — suppress everything
+    return noqa
+
+
 def lint_file(
     filepath: Path, disabled_rules: set[str] | None = None
 ) -> list[LintIssue]:
@@ -194,9 +218,21 @@ def lint_file(
                     )
                 )
 
-        return sorted(
+        all_issues = sorted(
             linter.issues + source_issues, key=lambda x: (x.line, x.column)
         )
+
+        # Filter out issues suppressed by # noqa comments.
+        noqa = _parse_noqa(content)
+        def _suppressed(issue: LintIssue) -> bool:
+            suppression = noqa.get(issue.line)
+            if suppression is None and issue.line in noqa:
+                return True   # bare # noqa
+            if isinstance(suppression, set) and issue.code in suppression:
+                return True
+            return False
+
+        return [i for i in all_issues if not _suppressed(i)]
 
     except SyntaxError as e:
         return [
