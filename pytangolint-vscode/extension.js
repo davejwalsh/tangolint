@@ -15,6 +15,9 @@ const cp     = require('child_process');
 const path   = require('path');
 const fs     = require('fs');
 
+// Resolved during activate() — points to the deployed copy of pytangolint.py.
+let deployedLinterPath = null;
+
 // ── Module-level state ────────────────────────────────────────────────────────
 
 /** @type {vscode.DiagnosticCollection} */
@@ -83,9 +86,9 @@ function parseOutput(stdout) {
 /**
  * Locate pytangolint.py for the given document.
  * Search order:
- *   1. pytangolint.linterPath setting (if set)
- *   2. pytangolint.py bundled inside this extension (always available)
- *   3. pytangolint.py in the workspace root of the document (legacy fallback)
+ *   1. pytangolint.linterPath setting (if set and exists)
+ *   2. Scripts deployed to globalStorage during activate()
+ *   3. Workspace root (legacy fallback)
  *
  * @param {vscode.TextDocument} document
  * @returns {string|null}
@@ -95,9 +98,7 @@ function findLinterPath(document) {
     const configured = cfg.get('linterPath', '').trim();
     if (configured && fs.existsSync(configured)) return configured;
 
-    // Bundled copy inside the extension directory (always present).
-    const bundled = path.join(__dirname, 'pytangolint.py');
-    if (fs.existsSync(bundled)) return bundled;
+    if (deployedLinterPath && fs.existsSync(deployedLinterPath)) return deployedLinterPath;
 
     // Legacy: pytangolint.py in the workspace root.
     const wsFolder = vscode.workspace.getWorkspaceFolder(document.uri);
@@ -235,6 +236,29 @@ function lintDocument(document) {
     );
 }
 
+// ── Script deployment ─────────────────────────────────────────────────────────
+
+/**
+ * Copy pytangolint.py and pytangolint_rules.py from the extension bundle into
+ * globalStorage so they are reachable by the Python subprocess in any install
+ * context (local, remote SSH, vscode-server, devcontainer, etc.).
+ *
+ * @param {vscode.ExtensionContext} context
+ * @returns {Promise<string>} path to the deployed pytangolint.py
+ */
+async function deployScripts(context) {
+    const storageDir = context.globalStorageUri.fsPath;
+    await fs.promises.mkdir(storageDir, { recursive: true });
+
+    for (const script of ['pytangolint.py', 'pytangolint_rules.py']) {
+        const src = path.join(context.extensionPath, script);
+        const dst = path.join(storageDir, script);
+        await fs.promises.copyFile(src, dst);
+    }
+
+    return path.join(storageDir, 'pytangolint.py');
+}
+
 // ── Activation / deactivation ─────────────────────────────────────────────────
 
 /**
@@ -243,7 +267,15 @@ function lintDocument(document) {
  *
  * @param {vscode.ExtensionContext} context
  */
-function activate(context) {
+async function activate(context) {
+    // Deploy bundled scripts to globalStorage so they are always reachable.
+    try {
+        deployedLinterPath = await deployScripts(context);
+    } catch (err) {
+        vscode.window.showErrorMessage(`PyTango Linter: failed to deploy scripts — ${err.message}`);
+        return;
+    }
+
     diagnosticCollection = vscode.languages.createDiagnosticCollection('pytangolint');
 
     statusBarItem = vscode.window.createStatusBarItem(
