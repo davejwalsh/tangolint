@@ -3,11 +3,11 @@
   "displayName": "PyTango Linter",
   "description": "Tango Controls device-server linting: T-codes (Tango-specific) and G-codes (general Python), without false positives from Tango idioms.",
   "version": "0.1.0",
-  "publisher": "ska-sat-lmc",
+  "publisher": "davejwalsh",
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/ska-telescope/ska-sat-lmc.git"
+    "url": "https://github.com/davejwalsh/pytangolint.git"
   },
   "engines": {
     "vscode": "^1.74.0"
