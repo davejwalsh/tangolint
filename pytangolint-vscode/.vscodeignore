@@ -1,0 +1,4 @@
+# Files to exclude from the .vsix package
+.vscode/
+.vscodeignore
+*.vsix
