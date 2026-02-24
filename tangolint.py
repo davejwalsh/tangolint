@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-TangoLint - A linter for PyTango device server code.
+TangoLint - A linter for PyTango
 
-Checks for common issues and best practices in PyTango device implementations.
-Rules live in ``tangolint_rules.py``; add new checks there.
+Applies the rules that live in `tangolint_rules.py`
 """
 
 import argparse
 import ast
 import sys
+import re
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,8 +66,6 @@ class PyTangoLinter(ast.NodeVisitor):
                         ast.AsyncFunctionDef, []
                     ).append(rule)
 
-    # ── Internal helpers ───────────────────────────────────────────────────
-
     def _ctx(self) -> rules.RuleContext:
         """Return a base RuleContext from the current linter state."""
         return rules.RuleContext(
@@ -87,8 +86,6 @@ class PyTangoLinter(ast.NodeVisitor):
                         message=message,
                     )
                 )
-
-    # ── Visitor methods ────────────────────────────────────────────────────
 
     def generic_visit(self, node: ast.AST) -> None:
         """Dispatch rules for nodes without a dedicated visit_ method."""
@@ -160,16 +157,12 @@ class PyTangoLinter(ast.NodeVisitor):
         self._run(node, self._ctx())
         ast.NodeVisitor.generic_visit(self, node)
 
-
-import re
-
-
 def _parse_noqa(source: str) -> dict[int, set[str] | None]:
-    """Parse ``# noqa`` annotations from *source*.
+    """Parse noqa annotations.
 
-    Returns a dict mapping 1-based line numbers to either:
-    - ``None``        — suppress **all** issues on that line (bare ``# noqa``)
-    - ``set[str]``    — suppress only the listed codes  (``# noqa: T023, G001``)
+    Returns a dict as a map to:
+    - `None`        — suppress all issues on that line (i.e. if there is a `# noqa`)
+    - `set[str]`    — suppress only the listed codes  (i.e. `# noqa: T023, G001`)
     """
     noqa: dict[int, set[str] | None] = {}
     pattern = re.compile(r"#\s*noqa(?::\s*([A-Z0-9,\s]+))?", re.IGNORECASE)
@@ -184,7 +177,6 @@ def _parse_noqa(source: str) -> dict[int, set[str] | None]:
             noqa[lineno] = None  # bare # noqa — suppress everything
     return noqa
 
-
 def lint_file(
     filepath: Path, disabled_rules: set[str] | None = None
 ) -> list[LintIssue]:
@@ -198,11 +190,9 @@ def lint_file(
         linter = PyTangoLinter(str(filepath), disabled_rules=disabled)
         linter.visit(tree)
 
-        if not linter.has_tango_import:
-            # Not a Tango file; skip all checks.
+        if not linter.has_tango_import: #This ain't be tango
             return []
 
-        # Collect source-text rule violations.
         source_issues: list[LintIssue] = []
         for rule in rules.get_source_rules():
             if rule.code in disabled:
@@ -222,7 +212,7 @@ def lint_file(
             linter.issues + source_issues, key=lambda x: (x.line, x.column)
         )
 
-        # Filter out issues suppressed by # noqa comments.
+        # Filter # noqa annotations.
         noqa = _parse_noqa(content)
         def _suppressed(issue: LintIssue) -> bool:
             suppression = noqa.get(issue.line)
@@ -257,7 +247,8 @@ def lint_file(
 
 
 def format_issue(issue: LintIssue, filename: str) -> str:
-    """Format a linting issue for display."""
+    """Pretty."""
+    
     severity_colors = {
         "error": "\033[91m",  # Red
         "warning": "\033[93m",  # Yellow

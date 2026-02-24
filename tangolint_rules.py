@@ -1,29 +1,31 @@
 """Lint rules for TangoLint.
 
-To add a new rule
------------------
-1. Create a subclass of ``ASTRule`` (for AST-based checks) or ``SourceRule``
-   (for source-text checks).
-2. Set the class attributes::
+These rules get applied by the linter.
 
-       code     = "X001"       # unique rule code
-       severity = "warning"    # 'error', 'warning', or 'info'
-       handles  = (ast.Xyz,)   # AST node type(s) that trigger check()
-                               # (ASTRule only; omit for SourceRule)
+They are broken down into ASTRule or SourceRule.
 
-3. Implement the check method and ``yield`` each violation::
+A rule is a subclass of `ASTRule`` (for AST-based checks) or `SourceRule` (for source-text checks).
+Rule attributes:
+    code     = "X001"       # unique rule code
+    severity = "warning"    # 'error', 'warning', or 'info'
+    handles  = (ast.Xyz,)   # AST node type(s) that trigger check()
+                            # (ASTRule only; omit for SourceRule)
+
+For ASTRule, you need to mplement the check method: 
 
        # ASTRule:
        def check(self, node, ctx):
            if <condition>:
                yield node, "human-readable message"
 
+for SourceRuke, check_source:
        # SourceRule:
        def check_source(self, source):
            if <condition>:
                yield line_number, column, "human-readable message"
 
-The rule is registered automatically; no further wiring is required.
+both required a `yield` for each violation
+
 """
 
 from __future__ import annotations
@@ -32,36 +34,21 @@ import ast
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
-# ── Auto-registration registries ──────────────────────────────────────────────
-
 _AST_RULES: list[ASTRule] = []
 _SOURCE_RULES: list[SourceRule] = []
 
-
-# ── Rule context ──────────────────────────────────────────────────────────────
-
-
 @dataclass
 class RuleContext:
-    """Linter state provided to every rule when it runs."""
+    """State context."""
 
     in_device_class: bool = False
     current_class: str | None = None
-    # Populated for FunctionDef nodes inside device classes:
     is_tango_attribute: bool = False
     is_tango_command: bool = False
     attribute_config: dict[str, Any] = field(default_factory=dict)
 
-
-# ── Base classes ──────────────────────────────────────────────────────────────
-
-
 class ASTRule:
-    """Base class for rules that inspect AST nodes.
-
-    Subclass, set ``code``, ``severity``, and ``handles``, then implement
-    ``check``.  The subclass is registered automatically.
-    """
+    """AST nodes rules."""
 
     code: str = ""
     severity: str = "warning"
@@ -82,11 +69,7 @@ class ASTRule:
 
 
 class SourceRule:
-    """Base class for rules that inspect raw source text.
-
-    Subclass, set ``code`` and ``severity``, then implement
-    ``check_source``.  The subclass is registered automatically.
-    """
+    """Source code rules """
 
     code: str = ""
     severity: str = "info"
@@ -101,9 +84,7 @@ class SourceRule:
         return
         yield  # pragma: no cover
 
-
-# ── AST helpers (available to rule implementations) ───────────────────────────
-
+# Helpers
 
 def get_name(node: ast.expr) -> str:
     """Return the dotted name of a Name, Attribute, or Call node."""
@@ -143,10 +124,6 @@ def has_call_to(node: ast.AST, func_name: str) -> bool:
         for child in ast.walk(node)
     )
 
-
-# ── Public accessors ──────────────────────────────────────────────────────────
-
-
 def get_ast_rules() -> list[ASTRule]:
     """Return all registered AST rules."""
     return list(_AST_RULES)
@@ -156,11 +133,11 @@ def get_source_rules() -> list[SourceRule]:
     """Return all registered source-text rules."""
     return list(_SOURCE_RULES)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Tango-specific rules  (T-codes)
-# ══════════════════════════════════════════════════════════════════════════════
-
+# # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# 
+# Tango-specific rules  - "T-codes"
+#
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 class T001_DeviceClassNaming(ASTRule):
     """Device class name should start with an uppercase letter."""
@@ -172,7 +149,6 @@ class T001_DeviceClassNaming(ASTRule):
     def check(self, node: ast.ClassDef, ctx: RuleContext):  # type: ignore[override]
         if ctx.in_device_class and not node.name[0].isupper():
             yield node, f"Device class '{node.name}' should start with uppercase letter"
-
 
 class T010_PropertyMissingAnnotation(ASTRule):
     """device_property must have a type annotation."""
@@ -190,7 +166,6 @@ class T010_PropertyMissingAnnotation(ASTRule):
             and node.annotation is None
         ):
             yield node, f"Device property '{node.target.id}' must have type annotation"
-
 
 class T011_PropertyNaming(ASTRule):
     """device_property name should use PascalCase."""
@@ -220,7 +195,6 @@ class T020_AttributeMissingDocstring(ASTRule):
     def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
         if ctx.is_tango_attribute and not ast.get_docstring(node):
             yield node, f"Attribute '{node.name}' should have a docstring"
-
 
 class T021_AttributeMissingReturnType(ASTRule):
     """Tango @attribute method must have a return-type annotation."""
@@ -348,10 +322,12 @@ class T032_DoNotOverrideInit(ASTRule):
                 "override 'init_device()' instead"
             )
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# General rules  (G-codes) — standard Python, safe for Tango code
-# ══════════════════════════════════════════════════════════════════════════════
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# 
+# General rules  "G-codes"
+# Standard Python linting, but safe for Tango code
+# 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 
 class G001_BareExcept(ASTRule):
@@ -367,7 +343,6 @@ class G001_BareExcept(ASTRule):
                 "Bare except clause catches all exceptions; specify the exception type"
             )
 
-
 class G002_EmptyExcept(ASTRule):
     """Empty except block silently swallows exceptions."""
 
@@ -381,7 +356,6 @@ class G002_EmptyExcept(ASTRule):
                 "Empty except block silently swallows exceptions; "
                 "add error handling or a comment"
             )
-
 
 class G003_SingletonComparison(ASTRule):
     """Use 'is'/'is not' when comparing against None, True, or False."""
@@ -411,7 +385,6 @@ class G003_SingletonComparison(ASTRule):
             if msg := self._message(node.ops[0], node.left.value):
                 yield node, msg
 
-
 class G004_MutableDefault(ASTRule):
     """Mutable default argument; use None and initialise inside the function."""
 
@@ -430,7 +403,6 @@ class G004_MutableDefault(ASTRule):
                     "use None and initialise inside the function"
                 )
                 return  # one warning per function is enough
-
 
 class G005_StarImport(ASTRule):
     """Star import pollutes the namespace; import names explicitly."""
