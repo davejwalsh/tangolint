@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * PyTango Linter — VS Code extension.
+ * TangoLint — VS Code extension.
  *
- * Runs pytangolint.py as a subprocess whenever a Python file is opened or
+ * Runs tangolint.py as a subprocess whenever a Python file is opened or
  * saved, then surfaces the results as VS Code diagnostics (squiggles +
  * Problems panel).
  *
@@ -15,7 +15,7 @@ const cp     = require('child_process');
 const path   = require('path');
 const fs     = require('fs');
 
-// Resolved during activate() — points to the deployed copy of pytangolint.py.
+// Resolved during activate() — points to the deployed copy of tangolint.py.
 let deployedLinterPath = null;
 
 // ── Module-level state ────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ const debounceTimers = new Map();
 // ── Parsing ───────────────────────────────────────────────────────────────────
 
 /**
- * Matches one pytangolint output line, e.g.:
+ * Matches one TangoLint output line, e.g.:
  *   path/to/file.py:10:4: warning: T023 Attribute 'foo' needs 'description'
  *
  * Groups: (path)(line)(col)(severity)(code)(message)
@@ -51,7 +51,7 @@ function toVSCodeSeverity(severity) {
 }
 
 /**
- * Parse pytangolint --no-color stdout into an array of VS Code Diagnostics.
+ * Parse TangoLint --no-color stdout into an array of VS Code Diagnostics.
  * Lines that do not match the issue format are silently ignored (separator
  * lines, summary lines, "✓ No issues found", etc.).
  *
@@ -74,7 +74,7 @@ function parseOutput(stdout) {
             `${code}: ${message}`,
             toVSCodeSeverity(severity)
         );
-        diag.source = 'pytangolint';
+        diag.source = 'tangolint';
         diag.code   = code;
         diagnostics.push(diag);
     }
@@ -84,9 +84,9 @@ function parseOutput(stdout) {
 // ── Path resolution ───────────────────────────────────────────────────────────
 
 /**
- * Locate pytangolint.py for the given document.
+ * Locate tangolint.py for the given document.
  * Search order:
- *   1. pytangolint.linterPath setting (if set and exists)
+ *   1. tangolint.linterPath setting (if set and exists)
  *   2. Scripts deployed to globalStorage during activate()
  *   3. Workspace root (legacy fallback)
  *
@@ -94,16 +94,16 @@ function parseOutput(stdout) {
  * @returns {string|null}
  */
 function findLinterPath(document) {
-    const cfg = vscode.workspace.getConfiguration('pytangolint');
+    const cfg = vscode.workspace.getConfiguration('tangolint');
     const configured = cfg.get('linterPath', '').trim();
     if (configured && fs.existsSync(configured)) return configured;
 
     if (deployedLinterPath && fs.existsSync(deployedLinterPath)) return deployedLinterPath;
 
-    // Legacy: pytangolint.py in the workspace root.
+    // Legacy: tangolint.py in the workspace root.
     const wsFolder = vscode.workspace.getWorkspaceFolder(document.uri);
     if (wsFolder) {
-        const candidate = path.join(wsFolder.uri.fsPath, 'pytangolint.py');
+        const candidate = path.join(wsFolder.uri.fsPath, 'tangolint.py');
         if (fs.existsSync(candidate)) return candidate;
     }
 
@@ -113,14 +113,14 @@ function findLinterPath(document) {
 /**
  * Resolve the Python interpreter to use.
  * Preference order:
- *   1. pytangolint.pythonPath setting (if set)
+ *   1. tangolint.pythonPath setting (if set)
  *   2. Active interpreter from the Microsoft Python extension
  *   3. 'python3'
  *
  * @returns {string}
  */
 function getPythonPath() {
-    const cfg = vscode.workspace.getConfiguration('pytangolint');
+    const cfg = vscode.workspace.getConfiguration('tangolint');
     const configured = cfg.get('pythonPath', '').trim();
     if (configured) return configured;
 
@@ -139,8 +139,8 @@ function getPythonPath() {
 // ── Status bar helpers ────────────────────────────────────────────────────────
 
 function statusRunning() {
-    statusBarItem.text    = '$(sync~spin) PyTango';
-    statusBarItem.tooltip = 'PyTango Linter: running…';
+    statusBarItem.text    = '$(sync~spin) TangoLint';
+    statusBarItem.tooltip = 'TangoLint: running…';
     statusBarItem.show();
 }
 
@@ -150,20 +150,20 @@ function statusDone(diagnostics) {
     const warnings = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
 
     if (errors > 0) {
-        statusBarItem.text    = `$(error) PyTango: ${errors}E ${warnings}W`;
-        statusBarItem.tooltip = `PyTango Linter: ${errors} error(s), ${warnings} warning(s)`;
+        statusBarItem.text    = `$(error) TangoLint: ${errors}E ${warnings}W`;
+        statusBarItem.tooltip = `TangoLint: ${errors} error(s), ${warnings} warning(s)`;
     } else if (warnings > 0) {
-        statusBarItem.text    = `$(warning) PyTango: ${warnings}W`;
-        statusBarItem.tooltip = `PyTango Linter: ${warnings} warning(s)`;
+        statusBarItem.text    = `$(warning) TangoLint: ${warnings}W`;
+        statusBarItem.tooltip = `TangoLint: ${warnings} warning(s)`;
     } else {
-        statusBarItem.text    = '$(check) PyTango';
-        statusBarItem.tooltip = 'PyTango Linter: no issues';
+        statusBarItem.text    = '$(check) TangoLint';
+        statusBarItem.tooltip = 'TangoLint: no issues';
     }
 }
 
 function statusError(message) {
-    statusBarItem.text    = '$(alert) PyTango';
-    statusBarItem.tooltip = `PyTango Linter: ${message}`;
+    statusBarItem.text    = '$(alert) TangoLint';
+    statusBarItem.tooltip = `TangoLint: ${message}`;
     statusBarItem.show();
 }
 
@@ -181,14 +181,14 @@ const ALL_RULE_CODES = [
  * @returns {string[]}
  */
 function getDisabledRules() {
-    const cfg = vscode.workspace.getConfiguration('pytangolint');
+    const cfg = vscode.workspace.getConfiguration('tangolint');
     return ALL_RULE_CODES.filter(code => cfg.get(`rules.${code}`, true) === false);
 }
 
 // ── Core lint runner ──────────────────────────────────────────────────────────
 
 /**
- * Run pytangolint on a single document and update the diagnostic collection.
+ * Run TangoLint on a single document and update the diagnostic collection.
  *
  * @param {vscode.TextDocument} document
  */
@@ -200,7 +200,7 @@ function lintDocument(document) {
 
     const linterPath = findLinterPath(document);
     if (!linterPath) {
-        // pytangolint.py not found — clear stale diagnostics and stay silent
+        // tangolint.py not found — clear stale diagnostics and stay silent
         diagnosticCollection.delete(document.uri);
         return;
     }
@@ -224,7 +224,7 @@ function lintDocument(document) {
             // Non-zero exit codes (1 = issues found) are expected; only log
             // unexpected stderr (e.g. Python import errors, missing modules).
             if (stderr && stderr.trim()) {
-                console.error('[pytangolint]', stderr.trim());
+                console.error('[tangolint]', stderr.trim());
                 statusError(stderr.trim().split('\n')[0]);
                 return;
             }
@@ -239,24 +239,24 @@ function lintDocument(document) {
 // ── Script deployment ─────────────────────────────────────────────────────────
 
 /**
- * Copy pytangolint.py and pytangolint_rules.py from the extension bundle into
+ * Copy tangolint.py and tangolint_rules.py from the extension bundle into
  * globalStorage so they are reachable by the Python subprocess in any install
  * context (local, remote SSH, vscode-server, devcontainer, etc.).
  *
  * @param {vscode.ExtensionContext} context
- * @returns {Promise<string>} path to the deployed pytangolint.py
+ * @returns {Promise<string>} path to the deployed tangolint.py
  */
 async function deployScripts(context) {
     const storageDir = context.globalStorageUri.fsPath;
     await fs.promises.mkdir(storageDir, { recursive: true });
 
-    for (const script of ['pytangolint.py', 'pytangolint_rules.py']) {
+    for (const script of ['tangolint.py', 'tangolint_rules.py']) {
         const src = path.join(context.extensionPath, script);
         const dst = path.join(storageDir, script);
         await fs.promises.copyFile(src, dst);
     }
 
-    return path.join(storageDir, 'pytangolint.py');
+    return path.join(storageDir, 'tangolint.py');
 }
 
 // ── Activation / deactivation ─────────────────────────────────────────────────
@@ -272,11 +272,11 @@ async function activate(context) {
     try {
         deployedLinterPath = await deployScripts(context);
     } catch (err) {
-        vscode.window.showErrorMessage(`PyTango Linter: failed to deploy scripts — ${err.message}`);
+        vscode.window.showErrorMessage(`TangoLint: failed to deploy scripts — ${err.message}`);
         return;
     }
 
-    diagnosticCollection = vscode.languages.createDiagnosticCollection('pytangolint');
+    diagnosticCollection = vscode.languages.createDiagnosticCollection('tangolint');
 
     statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left, 100
@@ -287,7 +287,7 @@ async function activate(context) {
 
     // ── Event subscriptions ────────────────────────────────────────────────
 
-    const cfg = () => vscode.workspace.getConfiguration('pytangolint');
+    const cfg = () => vscode.workspace.getConfiguration('tangolint');
 
     context.subscriptions.push(
         vscode.workspace.onDidOpenTextDocument(doc => {
@@ -330,7 +330,7 @@ async function activate(context) {
         }),
 
         // Register a manual "lint this file" command
-        vscode.commands.registerCommand('pytangolint.lintFile', () => {
+        vscode.commands.registerCommand('tangolint.lintFile', () => {
             const editor = vscode.window.activeTextEditor;
             if (editor) lintDocument(editor.document);
         })

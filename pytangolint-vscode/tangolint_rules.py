@@ -1,4 +1,4 @@
-"""Lint rules for pytangolint.
+"""Lint rules for TangoLint.
 
 To add a new rule
 -----------------

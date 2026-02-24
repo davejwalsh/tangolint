@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PyTango Linter - A linter for PyTango device server code.
+TangoLint - A linter for PyTango device server code.
 
 Checks for common issues and best practices in PyTango device implementations.
-Rules live in ``pytangolint_rules.py``; add new checks there.
+Rules live in ``tangolint_rules.py``; add new checks there.
 """
 
 import argparse
@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytangolint_rules as rules
+import tangolint_rules as rules
 
 
 @dataclass
@@ -314,7 +314,7 @@ def print_summary(
 def main() -> int:
     """Main entry point for the linter."""
     parser = argparse.ArgumentParser(
-        description="PyTango Linter - Check PyTango device server code"
+        description="TangoLint - Check PyTango device server code"
     )
     parser.add_argument(
         "files", nargs="*", type=Path, help="Python files to lint"

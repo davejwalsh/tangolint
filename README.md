@@ -1,4 +1,4 @@
-# pytangolint
+# tangolint
 
 A linter for [PyTango](https://pytango.readthedocs.io/) device server code.
 Catches common mistakes and enforces best practices without false positives from
@@ -10,7 +10,7 @@ Tango idioms that trip up general-purpose linters (ruff, pylint, mypy).
 
 ### VS Code extension (recommended)
 
-1. Download `pytangolint-0.1.0.vsix` from the [latest release](https://github.com/davejwalsh/pytangolint/releases).
+1. Download `tangolint-0.1.0.vsix` from the [latest release](https://github.com/davejwalsh/tangolint/releases).
 2. Open VS Code → Extensions panel (`Ctrl+Shift+X`) → **`···`** menu → **Install from VSIX…**
 3. Select the downloaded file and reload the window.
 
@@ -18,10 +18,10 @@ The extension is self-contained — no Python packages to install.
 
 ### Command-line tool
 
-Copy `pytangolint.py` and `pytangolint_rules.py` into your project (they must stay together), then run:
+Copy `tangolint.py` and `tangolint_rules.py` into your project (they must stay together), then run:
 
 ```bash
-python3 pytangolint.py mydevice.py
+python3 tangolint.py mydevice.py
 ```
 
 Requires Python 3.9+. No third-party dependencies.
@@ -41,7 +41,7 @@ Once installed the extension lints automatically:
 Issues appear as squiggles in the editor and in the **Problems** panel (`Ctrl+Shift+M`).
 The status bar item (bottom-left) shows a live summary — click it to jump to the Problems panel.
 
-**Manually lint the active file:** `Ctrl+Shift+P` → `PyTango Linter: Lint Current File`
+**Manually lint the active file:** `Ctrl+Shift+P` → `TangoLint: Lint Current File`
 
 ### Settings
 
@@ -49,23 +49,23 @@ Open VS Code Settings (`Ctrl+,`) and search for **PyTango** to see all options.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `pytangolint.lintOnOpen` | `true` | Lint when a file is opened |
-| `pytangolint.lintOnSave` | `true` | Lint when a file is saved |
-| `pytangolint.lintOnChange` | `false` | Lint while typing (600 ms debounce) |
-| `pytangolint.pythonPath` | `""` | Python interpreter to use (auto-detected if empty) |
-| `pytangolint.linterPath` | `""` | Path to a custom `pytangolint.py` (uses bundled copy if empty) |
+| `tangolint.lintOnOpen` | `true` | Lint when a file is opened |
+| `tangolint.lintOnSave` | `true` | Lint when a file is saved |
+| `tangolint.lintOnChange` | `false` | Lint while typing (600 ms debounce) |
+| `tangolint.pythonPath` | `""` | Python interpreter to use (auto-detected if empty) |
+| `tangolint.linterPath` | `""` | Path to a custom `tangolint.py` (uses bundled copy if empty) |
 
 #### Enabling / disabling individual rules
 
-Each rule has its own toggle under **PyTango Linter › Rules** in the Settings UI.
+Each rule has its own toggle under **TangoLint › Rules** in the Settings UI.
 Untick a rule to silence it globally across all files.
 
 You can also set them in `.vscode/settings.json`:
 
 ```json
 {
-  "pytangolint.rules.T024": false,
-  "pytangolint.rules.G007": false
+  "tangolint.rules.T024": false,
+  "tangolint.rules.G007": false
 }
 ```
 
@@ -75,22 +75,22 @@ You can also set them in `.vscode/settings.json`:
 
 ```bash
 # Lint one or more files
-python3 pytangolint.py mydevice.py
+python3 tangolint.py mydevice.py
 
 # Lint multiple files
-python3 pytangolint.py src/**/*.py
+python3 tangolint.py src/**/*.py
 
 # Treat warnings as errors (non-zero exit on any warning)
-python3 pytangolint.py --strict mydevice.py
+python3 tangolint.py --strict mydevice.py
 
 # Disable specific rules for this run
-python3 pytangolint.py --disable T024 --disable G007 mydevice.py
+python3 tangolint.py --disable T024 --disable G007 mydevice.py
 
 # List all rules
-python3 pytangolint.py --list-rules
+python3 tangolint.py --list-rules
 
 # No colour output (e.g. for CI logs)
-python3 pytangolint.py --no-color mydevice.py
+python3 tangolint.py --no-color mydevice.py
 ```
 
 ---
@@ -143,7 +143,7 @@ x = get_val()                 # noqa: T023, G001  — suppress multiple rules
 
 ## Adding custom rules
 
-Edit `pytangolint_rules.py`. Each rule is a class — no registration needed:
+Edit `tangolint_rules.py`. Each rule is a class — no registration needed:
 
 ```python
 class T033_MyCheck(ASTRule):
@@ -158,10 +158,10 @@ class T033_MyCheck(ASTRule):
             yield node, "Human-readable message"
 ```
 
-See the docstring at the top of `pytangolint_rules.py` for the full guide.
+See the docstring at the top of `tangolint_rules.py` for the full guide.
 
 ---
 
 ## Repository
 
-https://github.com/davejwalsh/pytangolint
+https://github.com/davejwalsh/tangolint

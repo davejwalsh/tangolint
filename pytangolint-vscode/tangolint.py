@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PyTango Linter - A linter for PyTango device server code.
+TangoLint - A linter for PyTango device server code.
 
 Checks for common issues and best practices in PyTango device implementations.
-Rules live in ``pytangolint_rules.py``; add new checks there.
+Rules live in ``tangolint_rules.py``; add new checks there.
 """
 
 import argparse
@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytangolint_rules as rules
+import tangolint_rules as rules
 
 
 @dataclass
@@ -28,6 +28,8 @@ class LintIssue:
 
 class PyTangoLinter(ast.NodeVisitor):
     """AST visitor that dispatches nodes to registered lint rules."""
+
+    #: Tango base class names used to detect device classes.
     _TANGO_BASES = frozenset(
         [
             "Device",
@@ -50,16 +52,20 @@ class PyTangoLinter(ast.NodeVisitor):
         self.property_names: set[str] = set()
         self.in_device_class = False
 
+        # Build dispatch table: node_type -> [rule, ...]
         self._rule_map: dict[type, list[rules.ASTRule]] = {}
         for rule in rules.get_ast_rules():
             if rule.code in self.disabled_rules:
                 continue
             for node_type in rule.handles:
                 self._rule_map.setdefault(node_type, []).append(rule)
+                # Async functions share the same rules as regular functions.
                 if node_type is ast.FunctionDef:
                     self._rule_map.setdefault(
                         ast.AsyncFunctionDef, []
                     ).append(rule)
+
+    # ── Internal helpers ───────────────────────────────────────────────────
 
     def _ctx(self) -> rules.RuleContext:
         """Return a base RuleContext from the current linter state."""
@@ -81,6 +87,8 @@ class PyTangoLinter(ast.NodeVisitor):
                         message=message,
                     )
                 )
+
+    # ── Visitor methods ────────────────────────────────────────────────────
 
     def generic_visit(self, node: ast.AST) -> None:
         """Dispatch rules for nodes without a dedicated visit_ method."""
@@ -157,9 +165,9 @@ import re
 
 
 def _parse_noqa(source: str) -> dict[int, set[str] | None]:
-    """Parse ``# noqa`` annotations.
+    """Parse ``# noqa`` annotations from *source*.
 
-    This returns a dict, either:
+    Returns a dict mapping 1-based line numbers to either:
     - ``None``        — suppress **all** issues on that line (bare ``# noqa``)
     - ``set[str]``    — suppress only the listed codes  (``# noqa: T023, G001``)
     """
@@ -190,9 +198,11 @@ def lint_file(
         linter = PyTangoLinter(str(filepath), disabled_rules=disabled)
         linter.visit(tree)
 
-        if not linter.has_tango_import:  # Ain't no Tango here.
+        if not linter.has_tango_import:
+            # Not a Tango file; skip all checks.
             return []
 
+        # Collect source-text rule violations.
         source_issues: list[LintIssue] = []
         for rule in rules.get_source_rules():
             if rule.code in disabled:
@@ -212,7 +222,7 @@ def lint_file(
             linter.issues + source_issues, key=lambda x: (x.line, x.column)
         )
 
-        # Filter noqa.
+        # Filter out issues suppressed by # noqa comments.
         noqa = _parse_noqa(content)
         def _suppressed(issue: LintIssue) -> bool:
             suppression = noqa.get(issue.line)
@@ -247,7 +257,7 @@ def lint_file(
 
 
 def format_issue(issue: LintIssue, filename: str) -> str:
-    """Formated linting issue."""
+    """Format a linting issue for display."""
     severity_colors = {
         "error": "\033[91m",  # Red
         "warning": "\033[93m",  # Yellow
@@ -267,6 +277,7 @@ def print_summary(
 ) -> None:
     """Print a formatted summary of linting issues."""
     if not use_color:
+        # Strip color codes for non-terminal output
         global format_issue
         original_format = format_issue
 
@@ -303,7 +314,7 @@ def print_summary(
 def main() -> int:
     """Main entry point for the linter."""
     parser = argparse.ArgumentParser(
-        description="PyTango Linter - Check PyTango device server code"
+        description="TangoLint - Check PyTango device server code"
     )
     parser.add_argument(
         "files", nargs="*", type=Path, help="Python files to lint"

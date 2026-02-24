@@ -1,6 +1,6 @@
 {
-  "name": "pytangolint",
-  "displayName": "PyTango Linter",
+  "name": "tangolint",
+  "displayName": "TangoLint",
   "description": "Tango Controls device-server linting: T-codes (Tango-specific) and G-codes (general Python), without false positives from Tango idioms.",
   "version": "0.1.0",
   "publisher": "davejwalsh",
@@ -16,139 +16,140 @@
   "keywords": ["tango", "pytango", "linter", "ska", "python"],
   "activationEvents": ["onLanguage:python"],
   "main": "./extension.js",
+  "icon": "img/TangoLint.jpeg",
   "extensionKind": ["workspace"],
   "contributes": {
     "commands": [
       {
-        "command": "pytangolint.lintFile",
+        "command": "tangolint.lintFile",
         "title": "Lint Current File",
-        "category": "PyTango Linter"
+        "category": "TangoLint"
       }
     ],
     "configuration": {
-      "title": "PyTango Linter",
+      "title": "TangoLint",
       "properties": {
-        "pytangolint.pythonPath": {
+        "tangolint.pythonPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to the Python interpreter used to run `pytangolint.py`. Defaults to the active Python extension interpreter, then `python3`."
+          "markdownDescription": "Path to the Python interpreter used to run `tangolint.py`. Defaults to the active Python extension interpreter, then `python3`."
         },
-        "pytangolint.linterPath": {
+        "tangolint.linterPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Absolute path to `pytangolint.py`. Defaults to the bundled script inside the extension; set this only if you want to use a custom version."
+          "markdownDescription": "Absolute path to `tangolint.py`. Defaults to the bundled script inside the extension; set this only if you want to use a custom version."
         },
-        "pytangolint.lintOnChange": {
+        "tangolint.lintOnChange": {
           "type": "boolean",
           "default": false,
           "description": "Lint while typing as well as on save. Uses a 600 ms debounce."
         },
-        "pytangolint.lintOnSave": {
+        "tangolint.lintOnSave": {
           "type": "boolean",
           "default": true,
           "description": "Lint when a file is saved."
         },
-        "pytangolint.lintOnOpen": {
+        "tangolint.lintOnOpen": {
           "type": "boolean",
           "default": true,
           "description": "Lint when a file is opened."
         },
-        "pytangolint.rules.T001": {
+        "tangolint.rules.T001": {
           "type": "boolean",
           "default": true,
           "description": "[T001 · warning] Device class name should start with an uppercase letter."
         },
-        "pytangolint.rules.T010": {
+        "tangolint.rules.T010": {
           "type": "boolean",
           "default": true,
           "description": "[T010 · error] device_property must have a type annotation."
         },
-        "pytangolint.rules.T011": {
+        "tangolint.rules.T011": {
           "type": "boolean",
           "default": true,
           "description": "[T011 · warning] device_property name should use PascalCase."
         },
-        "pytangolint.rules.T020": {
+        "tangolint.rules.T020": {
           "type": "boolean",
           "default": true,
           "description": "[T020 · warning] Tango @attribute method should have a docstring."
         },
-        "pytangolint.rules.T021": {
+        "tangolint.rules.T021": {
           "type": "boolean",
           "default": true,
           "description": "[T021 · error] Tango @attribute method must have a return-type annotation."
         },
-        "pytangolint.rules.T022": {
+        "tangolint.rules.T022": {
           "type": "boolean",
           "default": true,
           "description": "[T022 · info] Attribute 'name' config key differs from the method name."
         },
-        "pytangolint.rules.T023": {
+        "tangolint.rules.T023": {
           "type": "boolean",
           "default": true,
           "description": "[T023 · warning] Tango @attribute should include a 'description' parameter."
         },
-        "pytangolint.rules.T024": {
+        "tangolint.rules.T024": {
           "type": "boolean",
           "default": true,
           "description": "[T024 · info] Tango @attribute may need a 'unit' parameter."
         },
-        "pytangolint.rules.T025": {
+        "tangolint.rules.T025": {
           "type": "boolean",
           "default": true,
           "description": "[T025 · info] Tango @attribute body may need quality validation via set_validity."
         },
-        "pytangolint.rules.T030": {
+        "tangolint.rules.T030": {
           "type": "boolean",
           "default": true,
           "description": "[T030 · warning] Tango @command method should have a docstring."
         },
-        "pytangolint.rules.T031": {
+        "tangolint.rules.T031": {
           "type": "boolean",
           "default": true,
           "description": "[T031 · info] Tango @command name should use PascalCase."
         },
-        "pytangolint.rules.T032": {
+        "tangolint.rules.T032": {
           "type": "boolean",
           "default": true,
           "description": "[T032 · error] Tango device classes must not override __init__; use init_device() instead."
         },
-        "pytangolint.rules.G001": {
+        "tangolint.rules.G001": {
           "type": "boolean",
           "default": true,
           "description": "[G001 · warning] Bare except clause catches every exception; specify the type."
         },
-        "pytangolint.rules.G002": {
+        "tangolint.rules.G002": {
           "type": "boolean",
           "default": true,
           "description": "[G002 · warning] Empty except block silently swallows exceptions."
         },
-        "pytangolint.rules.G003": {
+        "tangolint.rules.G003": {
           "type": "boolean",
           "default": true,
           "description": "[G003 · warning] Use 'is'/'is not' when comparing against None, True, or False."
         },
-        "pytangolint.rules.G004": {
+        "tangolint.rules.G004": {
           "type": "boolean",
           "default": true,
           "description": "[G004 · warning] Mutable default argument; use None and initialise inside the function."
         },
-        "pytangolint.rules.G005": {
+        "tangolint.rules.G005": {
           "type": "boolean",
           "default": true,
           "description": "[G005 · warning] Star import pollutes the namespace; import names explicitly."
         },
-        "pytangolint.rules.G006": {
+        "tangolint.rules.G006": {
           "type": "boolean",
           "default": true,
           "description": "[G006 · info] Multiple modules on one import line; use separate statements."
         },
-        "pytangolint.rules.G007": {
+        "tangolint.rules.G007": {
           "type": "boolean",
           "default": true,
           "description": "[G007 · info] Line exceeds the maximum allowed length."
         },
-        "pytangolint.rules.G008": {
+        "tangolint.rules.G008": {
           "type": "boolean",
           "default": true,
           "description": "[G008 · info] print() in a device class method; use Tango stream methods instead."
