@@ -12,6 +12,10 @@ import re
 
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
+
+import json
+
 
 import tangolint_rules as rules
 
@@ -177,6 +181,81 @@ def _parse_noqa(source: str) -> dict[int, set[str] | None]:
             noqa[lineno] = None  # bare # noqa — suppress everything
     return noqa
 
+def run_tool(command: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+def run_ruff(filepath: Path) -> list[LintIssue]:
+    result = run_tool(
+        ["ruff", "check", str(filepath), "--output-format", "json"]
+    )
+
+    if not result.stdout.strip():
+        return []
+
+    issues = []
+    data = json.loads(result.stdout)
+
+    for item in data:
+        start = item.get("location", {})
+        end = item.get("end_location", start)
+        message = item.get("message", "")
+        severity = "error" if item.get("code", "").startswith("E") else "warning"
+        rule = item.get("code", "")
+
+        issues.append(
+            LintIssue(
+                line=end.get("row", 0),
+                column=end.get("column", 0),
+                message=f'{rule}: {message} [ruff]',
+                severity=severity,
+                code=rule,
+            )
+        )
+
+    return issues
+
+def run_mypy(filepath: Path) -> list[LintIssue]:
+    result = run_tool(
+        ["mypy", str(filepath), "--show-error-codes", "--no-color-output"]
+    )
+
+    issues = []
+
+    for line in result.stdout.splitlines():
+        if ": error:" not in line:
+            continue
+
+        parts = line.split(":")
+        file, line_no, severity, message = parts[0], parts[1], parts[2], ":".join(parts[3:])
+
+        message_part = message.strip()
+        severity = severity.strip()
+
+        # Extract error code if present
+        if "[" in message_part and "]" in message_part:
+            msg, code = message_part.rsplit("[", 1)
+            code = code.rstrip("]")
+        else:
+            msg = message_part
+            code = None
+
+        issues.append(
+            LintIssue(
+                line=line_no,
+                column=None,
+                message=f'{msg.strip()} [mypy]',
+                severity=severity,
+                code=code,
+            )
+        )
+
+    return issues
+
 def lint_file(
     filepath: Path, disabled_rules: set[str] | None = None
 ) -> list[LintIssue]:
@@ -191,7 +270,11 @@ def lint_file(
         linter.visit(tree)
 
         if not linter.has_tango_import: #This ain't be tango
-            return []
+            diagnostics = []
+            diagnostics += run_mypy(str(filepath))
+            diagnostics += run_ruff(str(filepath))
+            print(diagnostics)
+            return diagnostics
 
         source_issues: list[LintIssue] = []
         for rule in rules.get_source_rules():
