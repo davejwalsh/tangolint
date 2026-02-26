@@ -17,7 +17,7 @@ and ``mypy``
 2. Extract the files somewhere.
 2. Open VS Code / Extensions panel (`Ctrl+Shift+X`) 
 3. Click the three dots menu and select 'Install from VSIX'
-3. Select the downloaded `tangolint-0.1.0.vsix` file from your download location and reload the window.
+3. Select the downloaded `tangolint-0.1.1.vsix` file from your download location and reload the window.
 
 ### CLI
 

@@ -2,7 +2,7 @@
   "name": "tangolint",
   "displayName": "TangoLint",
   "description": "Tango Controls device-server linting: T-codes (Tango-specific) and G-codes (general Python), without compaints about Tango specific syntax.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "SKAO",
   "license": "BSD-3-Clause",
   "repository": {
