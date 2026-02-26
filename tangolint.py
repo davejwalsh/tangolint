@@ -193,7 +193,7 @@ def run_ruff(ruff_cmd: list[str], filepath: Path) -> list[LintIssue]:
         issues = []
         try:
             result = subprocess.run(
-                [*ruff_cmd, "check", str(filepath), "--format", "json"],
+                [*ruff_cmd, "check", str(filepath), "--output-format", "json"],
                 capture_output=True, text=True, check=False,
             )
             if not result.stdout.strip():

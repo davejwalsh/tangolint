@@ -3,7 +3,31 @@
 **/*.pyo
 .mypy_cache/
 .ruff_cache/
+.venv*
 .vscode/
 test/
 *.vsix
 .git/
+
+
+# Node
+node_modules/
+npm-debug.log
+
+# Python virtualenvs
+.venv/
+.venv-test/
+venv/
+env/
+
+# Git
+.git/
+.github/
+
+# Misc
+*.log
+*.pyc
+__pycache__/
+
+# Tests (optional)
+test/

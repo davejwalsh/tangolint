@@ -27,6 +27,7 @@ class badDevice(Device):
     def always_executed_hook(self):  # T035: no super call
         pass
 
+
     def __del__(self):  # T043: use delete_device instead
         self._value = None
 
