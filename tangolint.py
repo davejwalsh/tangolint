@@ -160,6 +160,12 @@ class TangoLinter(ast.NodeVisitor):
         self._run(node, self._ctx())
         ast.NodeVisitor.generic_visit(self, node)
 
+DEBUG_LOG = Path("/tmp/tangolint_debug.log")
+
+def _dbg(*args) -> None:
+    with DEBUG_LOG.open("a") as f:
+        print(*args, file=f)
+
 def _parse_noqa(source: str) -> dict[int, set[str] | None]:
     """Parse noqa annotations.
 
@@ -188,21 +194,17 @@ def run_tool(command: list[str]) -> subprocess.CompletedProcess:
         check=False,
     )
 
-def run_ruff(ruff_path: str, filepath: Path) -> list[LintIssue]:
-        python_path = sys.executable  # or workspace interpreter
+def run_ruff(ruff_cmd: list[str], filepath: Path) -> list[LintIssue]:
         issues = []
         try:
             result = subprocess.run(
-                [ruff_path, "check", str(filepath), "--format", "json"],
-                cwd=str(filepath.parent),
-                capture_output=True,
-                text=True,
-                check=False,
+                [*ruff_cmd, "check", str(filepath), "--format", "json"],
+                capture_output=True, text=True, check=False,
             )
             if not result.stdout.strip():
                 return []
 
-           
+            
             data = json.loads(result.stdout)
 
             for item in data:
@@ -222,52 +224,64 @@ def run_ruff(ruff_path: str, filepath: Path) -> list[LintIssue]:
                     )
                 )
             return issues
-        except FileNotFoundError:
-            print("Ruff is not installed in this environment")
+        except Exception as e:
+            _dbg(f"  run_ruff exception: {e}")
             return []
-    
 
-def run_mypy(mypy_path: str, filepath: Path) -> list[LintIssue]:
-    result = run_tool(
-        [mypy_path, str(filepath), "--show-error-codes", "--no-color-output"]
-    )
 
-    issues = []
-
-    for line in result.stdout.splitlines():
-        if ": error:" not in line:
-            continue
-
-        parts = line.split(":")
-        file, line_no, severity, message = parts[0], parts[1], parts[2], ":".join(parts[3:])
-
-        message_part = message.strip()
-        severity = severity.strip()
-
-        # Extract error code if present
-        if "[" in message_part and "]" in message_part:
-            msg, code = message_part.rsplit("[", 1)
-            code = code.rstrip("]")
-        else:
-            msg = message_part
-            code = None
-
-        issues.append(
-            LintIssue(
-                line=line_no,
-                column=None,
-                message=f'{msg.strip()} [mypy]',
-                severity=severity,
-                code=code,
-            )
+def run_mypy(mypy_cmd: list[str], filepath: Path) -> list[LintIssue]:
+    try:
+        result = run_tool(
+            [*mypy_cmd, str(filepath), "--show-error-codes", "--no-color-output"]
         )
+        _dbg(f"  mypy stdout: {result.stdout[:300]}")
+        _dbg(f"  mypy stderr: {result.stderr[:200]}")
 
-    return issues
+        issues = []
+        target = str(filepath.resolve())
+
+        for line in result.stdout.splitlines():
+            if ": error:" not in line:
+                continue
+
+            parts = line.split(":")
+            if len(parts) < 4:
+                continue
+            reported_file, line_no, severity, message = parts[0], parts[1], parts[2], ":".join(parts[3:])
+
+            # Skip errors from other files (mypy follows imports)
+            if str(Path(reported_file).resolve()) != target:
+                continue
+
+            message_part = message.strip()
+            severity = severity.strip()
+
+            # Extract error code if present, default to 'mypy'
+            if "[" in message_part and "]" in message_part:
+                msg, code = message_part.rsplit("[", 1)
+                code = code.rstrip("]").strip() or 'mypy'
+            else:
+                msg = message_part
+                code = 'mypy'
+
+            issues.append(
+                LintIssue(
+                    line=line_no,
+                    column=0,
+                    message=f'{msg.strip()} [mypy]',
+                    severity=severity,
+                    code=code,
+                )
+            )
+        return issues
+    except Exception as e:
+        _dbg(f"  run_mypy exception: {e}")
+        return []
 
 def lint_file(
-    filepath: Path, disabled_rules: set[str] | None = None, 
-    mypy_path: str | None = None, 
-    ruff_path: str | None = None
+    filepath: Path, disabled_rules: set[str] | None = None,
+    mypy_cmd: list[str] | None = None,
+    ruff_cmd: list[str] | None = None,
 ) -> list[LintIssue]:
     """Lint a Python file for PyTango issues."""
     try:
@@ -279,13 +293,19 @@ def lint_file(
         linter = TangoLinter(str(filepath), disabled_rules=disabled)
         linter.visit(tree)
 
+        _dbg(f"  has_tango_import={linter.has_tango_import}")
+
         if not linter.has_tango_import: #This ain't be tango
             diagnostics = []
-            if mypy_path:
-                diagnostics += run_mypy(mypy_path,filepath)
-            if ruff_path:
-                diagnostics += run_ruff(ruff_path,filepath)
-            print(diagnostics)
+            if mypy_cmd:
+                mypy_issues = run_mypy(mypy_cmd, filepath)
+                _dbg(f"  mypy returned {len(mypy_issues)} issues")
+                diagnostics += mypy_issues
+            if ruff_cmd:
+                ruff_issues = run_ruff(ruff_cmd, filepath)
+                _dbg(f"  ruff returned {len(ruff_issues)} issues")
+                diagnostics += ruff_issues
+            _dbg(f"  returning {len(diagnostics)} total issues")
             return diagnostics
 
         source_issues: list[LintIssue] = []
@@ -307,7 +327,7 @@ def lint_file(
             linter.issues + source_issues, key=lambda x: (x.line, x.column)
         )
 
-        # Filter # noqa annotations.
+        # Filter noqa annotations.
         noqa = _parse_noqa(content)
         def _suppressed(issue: LintIssue) -> bool:
             suppression = noqa.get(issue.line)
@@ -397,18 +417,45 @@ def print_summary(
     print(f"{'-'*80}\n")
 
 
+def _find_tool(name: str) -> str | None:
+    """Find a tool by name, checking PATH and the current Python interpreter's bin dir."""
+    found = which(name)
+    if found:
+        return found
+    candidate = Path(sys.executable).parent / name
+    if candidate.exists():
+        return str(candidate)
+    return None
+
+
+def _tool_cmd(name: str) -> list[str] | None:
+    """Return command list to invoke a tool.
+
+    Tries the standalone binary first, then falls back to `python -m <name>`
+    so tools installed only as Python modules still work.
+    """
+    path = _find_tool(name)
+    if path:
+        return [path]
+    result = subprocess.run(
+        [sys.executable, '-m', name, '--version'],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode == 0:
+        return [sys.executable, '-m', name]
+    return None
+
+
 def main() -> int:
-    ruff_path = which('ruff')
-    mypy_path = which('mypy')
-    if not ruff_path:
-        print("Warning: Ruff is not installed or not found in PATH. "
-              "Ruff checks will be skipped.", file=sys.stderr)    
-
-    if not mypy_path:
-        print("Warning: Mypy is not installed or not found in PATH. "
-              "Mypy checks will be skipped.", file=sys.stderr)
-
     """Main entry point for the linter."""
+    ruff_cmd = _tool_cmd('ruff')
+    mypy_cmd = _tool_cmd('mypy')
+    _dbg(f"=== tangolint main: sys.executable={sys.executable}")
+    _dbg(f"  ruff_cmd={ruff_cmd}  mypy_cmd={mypy_cmd}")
+    if not ruff_cmd:
+        print("Warning: ruff not found — ruff checks will be skipped.")
+    if not mypy_cmd:
+        print("Warning: mypy not found — mypy checks will be skipped.")
     parser = argparse.ArgumentParser(
         description="TangoLint - Check PyTango device server code"
     )
@@ -470,7 +517,7 @@ def main() -> int:
             print(f"Warning: Skipping non-Python file '{filepath}'")
             continue
 
-        issues = lint_file(filepath, disabled_rules=disabled, mypy_path=mypy_path, ruff_path=ruff_path)
+        issues = lint_file(filepath, disabled_rules=disabled, mypy_cmd=mypy_cmd, ruff_cmd=ruff_cmd)
         print_summary(issues, str(filepath), use_color=not args.no_color)
 
         total_errors += sum(1 for i in issues if i.severity == "error")

@@ -36,6 +36,7 @@ import os, sys  # noqa (intentional – demonstrates G006)
 #          makes it impossible to tell where symbols come from
 from tango import *  # noqa (intentional – demonstrates G005)
 
+
 # Specific imports used by the rest of the file
 from tango import DevState
 from tango.server import Device, attribute, command, device_property

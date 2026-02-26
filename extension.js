@@ -39,7 +39,7 @@ const debounceTimers = new Map();
  * The code group uses [A-Z]\d+ to anchor the match from the right, preventing
  * ambiguous splits on paths that contain colons (e.g. Windows drive letters).
  */
-const ISSUE_RE = /^(.*):(\d+):(\d+): (error|warning|info): ([A-Z]\d+) (.+)$/;
+const ISSUE_RE = /^(.*):(\d+):(\d+): (error|warning|info): ([A-Za-z][\w-]*) (.+)$/;
 
 /** @param {string} severity */
 function toVSCodeSeverity(severity) {
@@ -123,16 +123,31 @@ function getPythonPath() {
     const cfg = vscode.workspace.getConfiguration('tangolint');
     const configured = cfg.get('pythonPath', '').trim();
     if (configured) return configured;
-
     try {
         const pythonExt = vscode.extensions.getExtension('ms-python.python');
-        if (pythonExt?.isActive) {
-            const exec = pythonExt.exports?.settings
-                ?.getExecutionDetails?.()?.execCommand;
-            if (Array.isArray(exec) && exec.length > 0) return exec[0];
+        if (pythonExt) {
+            // Ensure the extension is activated
+            if (!pythonExt.isActive) {
+                // activate returns a Promise, but here we'll just use exports after activation
+                return pythonExt.activate().then(() => getInterpreterFromPythonExt(pythonExt));
+            } else {
+                return getInterpreterFromPythonExt(pythonExt);
+            }
         }
-    } catch (_) { /* Python extension not available or its API changed */ }
+    } catch (_) { /* ignore if Python extension not available */ }
+    return 'python3';
+}
 
+/** Extract the interpreter path from the Python extension API */
+function getInterpreterFromPythonExt(pythonExt) {
+    try {
+        const pythonApi = pythonExt.exports?.settings;
+        // Use `getExecutionDetails()` — this respects the active venv
+        const execDetails = pythonApi?.getExecutionDetails?.();
+        if (execDetails?.execCommand && execDetails.execCommand.length > 0) {
+            return execDetails.execCommand[0];
+        }
+    } catch (_) {}
     return 'python3';
 }
 
@@ -194,6 +209,7 @@ function getDisabledRules() {
  */
 function lintDocument(document) {
     // Only lint saved Python files (not untitled buffers, output panes, etc.)
+    
     if (document.uri.scheme !== 'file' || document.languageId !== 'python') {
         return;
     }
@@ -207,7 +223,8 @@ function lintDocument(document) {
 
     const pythonPath = getPythonPath();
     const filePath   = document.uri.fsPath;
-
+    console.log("TangoLint using python:", pythonPath);
+    
     // Build --disable args for any rules the user has turned off.
     const disabledArgs = getDisabledRules().flatMap(code => ['--disable', code]);
 
@@ -221,12 +238,11 @@ function lintDocument(document) {
             maxBuffer: 1024 * 1024, // 1 MB — more than enough for lint output
         },
         (err, stdout, stderr) => {
-            // Non-zero exit codes (1 = issues found) are expected; only log
-            // unexpected stderr (e.g. Python import errors, missing modules).
+            // Non-zero exit codes (1 = issues found) are expected; log stderr
+            // but still process stdout — stderr may contain harmless warnings
+            // (e.g. "ruff not found") that should not suppress diagnostics.
             if (stderr && stderr.trim()) {
-                console.error('[tangolint]', stderr.trim());
-                statusError(stderr.trim().split('\n')[0]);
-                return;
+                console.warn('[tangolint]', stderr.trim());
             }
 
             const diagnostics = parseOutput(stdout);
@@ -299,7 +315,7 @@ async function activate(context) {
         }),
 
         vscode.workspace.onDidChangeTextDocument(event => {
-            if (!cfg().get('lintOnChange', false)) return;
+            if (!cfg().get('lintOnChange', true)) return;
             const doc = event.document;
             if (doc.languageId !== 'python') return;
 
