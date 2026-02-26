@@ -15,10 +15,9 @@ from pathlib import Path
 import subprocess
 
 import json
-
+from shutil import which
 
 import tangolint_rules as rules
-
 
 @dataclass
 class LintIssue:
@@ -31,7 +30,7 @@ class LintIssue:
     message: str
 
 
-class PyTangoLinter(ast.NodeVisitor):
+class TangoLinter(ast.NodeVisitor):
     """AST visitor that dispatches nodes to registered lint rules."""
 
     #: Tango base class names used to detect device classes.
@@ -189,39 +188,48 @@ def run_tool(command: list[str]) -> subprocess.CompletedProcess:
         check=False,
     )
 
-def run_ruff(filepath: Path) -> list[LintIssue]:
-    result = run_tool(
-        ["ruff", "check", str(filepath), "--output-format", "json"]
-    )
-
-    if not result.stdout.strip():
-        return []
-
-    issues = []
-    data = json.loads(result.stdout)
-
-    for item in data:
-        start = item.get("location", {})
-        end = item.get("end_location", start)
-        message = item.get("message", "")
-        severity = "error" if item.get("code", "").startswith("E") else "warning"
-        rule = item.get("code", "")
-
-        issues.append(
-            LintIssue(
-                line=end.get("row", 0),
-                column=end.get("column", 0),
-                message=f'{rule}: {message} [ruff]',
-                severity=severity,
-                code=rule,
+def run_ruff(ruff_path: str, filepath: Path) -> list[LintIssue]:
+        python_path = sys.executable  # or workspace interpreter
+        issues = []
+        try:
+            result = subprocess.run(
+                [ruff_path, "check", str(filepath), "--format", "json"],
+                cwd=str(filepath.parent),
+                capture_output=True,
+                text=True,
+                check=False,
             )
-        )
+            if not result.stdout.strip():
+                return []
 
-    return issues
+           
+            data = json.loads(result.stdout)
 
-def run_mypy(filepath: Path) -> list[LintIssue]:
+            for item in data:
+                start = item.get("location", {})
+                end = item.get("end_location", start)
+                message = item.get("message", "")
+                severity = "error" if item.get("code", "").startswith("E") else "warning"
+                rule = item.get("code", "")
+
+                issues.append(
+                    LintIssue(
+                        line=end.get("row", 0),
+                        column=end.get("column", 0),
+                        message=f'{rule}: {message} [ruff]',
+                        severity=severity,
+                        code=rule,
+                    )
+                )
+            return issues
+        except FileNotFoundError:
+            print("Ruff is not installed in this environment")
+            return []
+    
+
+def run_mypy(mypy_path: str, filepath: Path) -> list[LintIssue]:
     result = run_tool(
-        ["mypy", str(filepath), "--show-error-codes", "--no-color-output"]
+        [mypy_path, str(filepath), "--show-error-codes", "--no-color-output"]
     )
 
     issues = []
@@ -257,7 +265,9 @@ def run_mypy(filepath: Path) -> list[LintIssue]:
     return issues
 
 def lint_file(
-    filepath: Path, disabled_rules: set[str] | None = None
+    filepath: Path, disabled_rules: set[str] | None = None, 
+    mypy_path: str | None = None, 
+    ruff_path: str | None = None
 ) -> list[LintIssue]:
     """Lint a Python file for PyTango issues."""
     try:
@@ -266,13 +276,15 @@ def lint_file(
 
         disabled = disabled_rules or set()
 
-        linter = PyTangoLinter(str(filepath), disabled_rules=disabled)
+        linter = TangoLinter(str(filepath), disabled_rules=disabled)
         linter.visit(tree)
 
         if not linter.has_tango_import: #This ain't be tango
             diagnostics = []
-            diagnostics += run_mypy(str(filepath))
-            diagnostics += run_ruff(str(filepath))
+            if mypy_path:
+                diagnostics += run_mypy(mypy_path,filepath)
+            if ruff_path:
+                diagnostics += run_ruff(ruff_path,filepath)
             print(diagnostics)
             return diagnostics
 
@@ -386,6 +398,16 @@ def print_summary(
 
 
 def main() -> int:
+    ruff_path = which('ruff')
+    mypy_path = which('mypy')
+    if not ruff_path:
+        print("Warning: Ruff is not installed or not found in PATH. "
+              "Ruff checks will be skipped.", file=sys.stderr)    
+
+    if not mypy_path:
+        print("Warning: Mypy is not installed or not found in PATH. "
+              "Mypy checks will be skipped.", file=sys.stderr)
+
     """Main entry point for the linter."""
     parser = argparse.ArgumentParser(
         description="TangoLint - Check PyTango device server code"
@@ -448,7 +470,7 @@ def main() -> int:
             print(f"Warning: Skipping non-Python file '{filepath}'")
             continue
 
-        issues = lint_file(filepath, disabled_rules=disabled)
+        issues = lint_file(filepath, disabled_rules=disabled, mypy_path=mypy_path, ruff_path=ruff_path)
         print_summary(issues, str(filepath), use_color=not args.no_color)
 
         total_errors += sum(1 for i in issues if i.severity == "error")

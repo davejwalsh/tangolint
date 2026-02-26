@@ -1,9 +1,9 @@
 {
   "name": "tangolint",
   "displayName": "TangoLint",
-  "description": "Tango Controls device-server linting: T-codes (Tango-specific) and G-codes (general Python), without false positives from Tango idioms.",
+  "description": "Tango Controls device-server linting: T-codes (Tango-specific) and G-codes (general Python), without compaints about Tango specific syntax.",
   "version": "0.1.0",
-  "publisher": "davejwalsh",
+  "publisher": "SKAO",
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
@@ -41,7 +41,7 @@
         },
         "tangolint.lintOnChange": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Lint while typing as well as on save. Uses a 600 ms debounce."
         },
         "tangolint.lintOnSave": {

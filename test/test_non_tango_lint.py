@@ -3,7 +3,6 @@ import numpy as np  # F401 (ruff)
 class MyClass:
     def method_one(self) -> int:
         return "Hello"
-
     def method_two(self) -> None:
         pring("World") 
 
