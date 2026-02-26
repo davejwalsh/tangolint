@@ -10,7 +10,7 @@ specific linting hints
 
 ### VS Code extension (recommended)
 
-1. Download `pytangolint-0.1.0.vsix` from https://github.com/davejwalsh/pytangolint/releases .
+1. Download `pytangolint-0.1.0.vsix` from https://github.com/davejwalsh/tangolint/releases .
 2. Open VS Code / Extensions panel (`Ctrl+Shift+X`) 
 3. Click the three dots menu and select 'Install from VSIX'
 3. Select the downloaded file and reload the window.
