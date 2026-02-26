@@ -114,6 +114,66 @@
           "default": true,
           "description": "[T032 · error] Tango device classes must not override __init__; use init_device() instead."
         },
+        "tangolint.rules.T033": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T033 · warning] init_device() should call super().init_device()."
+        },
+        "tangolint.rules.T034": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T034 · warning] delete_device() should call super().delete_device()."
+        },
+        "tangolint.rules.T035": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T035 · warning] always_executed_hook() should call super().always_executed_hook()."
+        },
+        "tangolint.rules.T040": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T040 · warning] device_property should have a default_value."
+        },
+        "tangolint.rules.T041": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T041 · info] device_property should have a 'doc' parameter."
+        },
+        "tangolint.rules.T042": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T042 · info] Tango device class should define init_device()."
+        },
+        "tangolint.rules.T043": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T043 · warning] __del__() is unreliable in Tango; use delete_device() instead."
+        },
+        "tangolint.rules.T044": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T044 · info] Tango @attribute should have a 'label' parameter."
+        },
+        "tangolint.rules.T045": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T045 · warning] READ_WRITE @attribute should have a corresponding write_<name>() method."
+        },
+        "tangolint.rules.T046": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T046 · warning] time.sleep() inside a device method blocks the Tango event loop."
+        },
+        "tangolint.rules.T047": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T047 · warning] threading.Thread in a device class; prefer Tango green mode or DeviceThread."
+        },
+        "tangolint.rules.T049": {
+          "type": "boolean",
+          "default": true,
+          "description": "[T049 · info] @command with arguments or return value should declare dtype_in / dtype_out."
+        },
         "tangolint.rules.G001": {
           "type": "boolean",
           "default": true,

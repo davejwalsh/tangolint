@@ -57,7 +57,7 @@ class ASTRule:
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if cls.code:  # skip the abstract base itself
+        if cls.code and not any(r.code == cls.code for r in _AST_RULES):
             _AST_RULES.append(cls())
 
     def check(
@@ -76,7 +76,7 @@ class SourceRule:
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if cls.code:
+        if cls.code and not any(r.code == cls.code for r in _SOURCE_RULES):
             _SOURCE_RULES.append(cls())
 
     def check_source(self, source: str) -> Iterator[tuple[int, int, str]]:
@@ -132,6 +132,34 @@ def get_ast_rules() -> list[ASTRule]:
 def get_source_rules() -> list[SourceRule]:
     """Return all registered source-text rules."""
     return list(_SOURCE_RULES)
+
+def _calls_super_method(func_node: ast.FunctionDef, method: str) -> bool:
+    """Return True if *func_node* contains a super().<method>() call."""
+    for child in ast.walk(func_node):
+        if (
+            isinstance(child, ast.Call)
+            and isinstance(child.func, ast.Attribute)
+            and child.func.attr == method
+            and isinstance(child.func.value, ast.Call)
+            and isinstance(child.func.value.func, ast.Name)
+            and child.func.value.func.id == 'super'
+        ):
+            return True
+    return False
+
+
+def _has_read_write_access(decorator: ast.expr) -> bool:
+    """Return True if the decorator includes access=...READ_WRITE..."""
+    if not isinstance(decorator, ast.Call):
+        return False
+    for kw in decorator.keywords:
+        if kw.arg == 'access':
+            val = kw.value
+            if isinstance(val, ast.Attribute) and 'READ_WRITE' in val.attr:
+                return True
+            if isinstance(val, ast.Name) and 'READ_WRITE' in val.id:
+                return True
+    return False
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # 
@@ -207,7 +235,6 @@ class T021_AttributeMissingReturnType(ASTRule):
         if ctx.is_tango_attribute and node.returns is None:
             yield node, f"Attribute '{node.name}' must have return type annotation"
 
-
 class T022_AttributeNameMismatch(ASTRule):
     """Attribute 'name' config key differs from the method name."""
 
@@ -224,7 +251,6 @@ class T022_AttributeNameMismatch(ASTRule):
                 f"Attribute name '{configured_name}' differs from method name '{node.name}'"
             )
 
-
 class T023_AttributeMissingDescription(ASTRule):
     """Tango @attribute should include a 'description' parameter."""
 
@@ -235,7 +261,6 @@ class T023_AttributeMissingDescription(ASTRule):
     def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
         if ctx.is_tango_attribute and "description" not in ctx.attribute_config:
             yield node, f"Attribute '{node.name}' should have 'description' parameter"
-
 
 class T024_AttributeMissingUnit(ASTRule):
     """Tango @attribute may need a 'unit' parameter."""
@@ -251,7 +276,6 @@ class T024_AttributeMissingUnit(ASTRule):
             and not node.name.endswith("Status")
         ):
             yield node, f"Attribute '{node.name}' may need 'unit' parameter"
-
 
 class T025_AttributeMissingQualityCheck(ASTRule):
     """Tango @attribute body may need quality validation via set_validity."""
@@ -275,7 +299,6 @@ class T025_AttributeMissingQualityCheck(ASTRule):
         if not has_call_to(node, "set_validity") and len(body) > 1:
             yield node, f"Attribute '{node.name}' may need quality validation"
 
-
 class T030_CommandMissingDocstring(ASTRule):
     """Tango @command method should have a docstring."""
 
@@ -286,7 +309,6 @@ class T030_CommandMissingDocstring(ASTRule):
     def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
         if ctx.is_tango_command and not ast.get_docstring(node):
             yield node, f"Command '{node.name}' should have a docstring"
-
 
 class T031_CommandNaming(ASTRule):
     """Tango @command name should use PascalCase."""
@@ -321,6 +343,225 @@ class T032_DoNotOverrideInit(ASTRule):
                 f"Device class '{ctx.current_class}' must not override '__init__'; "
                 "override 'init_device()' instead"
             )
+
+class T033_InitDeviceMissingSuper(ASTRule):
+    """init_device() should call super().init_device() to ensure proper initialisation."""
+
+    code = "T033"
+    severity = "warning"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class or node.name != 'init_device':
+            return
+        if not _calls_super_method(node, 'init_device'):
+            yield node, "init_device() should call super().init_device()"
+
+class T034_DeleteDeviceMissingSuper(ASTRule):
+    """delete_device() should call super().delete_device() to release base-class resources."""
+
+    code = "T034"
+    severity = "warning"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class or node.name != 'delete_device':
+            return
+        if not _calls_super_method(node, 'delete_device'):
+            yield node, "delete_device() should call super().delete_device()"
+
+class T035_AlwaysHookMissingSuper(ASTRule):
+    """always_executed_hook() should call super().always_executed_hook()."""
+
+    code = "T035"
+    severity = "warning"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class or node.name != 'always_executed_hook':
+            return
+        if not _calls_super_method(node, 'always_executed_hook'):
+            yield node, "always_executed_hook() should call super().always_executed_hook()"
+
+class T040_PropertyMissingDefault(ASTRule):
+    """device_property should have a default_value to avoid failures when unconfigured."""
+
+    code = "T040"
+    severity = "warning"
+    handles = (ast.AnnAssign,)
+
+    def check(self, node: ast.AnnAssign, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class or not isinstance(node.target, ast.Name):
+            return
+        if not (isinstance(node.value, ast.Call) and "device_property" in get_name(node.value.func)):
+            return
+        if not any(kw.arg == 'default_value' for kw in node.value.keywords):
+            yield node, (
+                f"Device property '{node.target.id}' should have a 'default_value' "
+                "to avoid failures when the property is unconfigured"
+            )
+
+class T041_PropertyMissingDoc(ASTRule):
+    """device_property should have a 'doc' parameter describing its purpose."""
+
+    code = "T041"
+    severity = "info"
+    handles = (ast.AnnAssign,)
+
+    def check(self, node: ast.AnnAssign, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class or not isinstance(node.target, ast.Name):
+            return
+        if not (isinstance(node.value, ast.Call) and "device_property" in get_name(node.value.func)):
+            return
+        if not any(kw.arg == 'doc' for kw in node.value.keywords):
+            yield node, f"Device property '{node.target.id}' should have a 'doc' parameter"
+
+class T042_MissingInitDevice(ASTRule):
+    """Tango device class should define init_device() to initialise internal state."""
+
+    code = "T042"
+    severity = "info"
+    handles = (ast.ClassDef,)
+
+    def check(self, node: ast.ClassDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class:
+            return
+        method_names = {
+            item.name
+            for item in node.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        if 'init_device' not in method_names:
+            yield node, (
+                f"Device class '{node.name}' does not define init_device(); "
+                "consider overriding it to initialise internal state"
+            )
+
+class T043_DelUsedInDevice(ASTRule):
+    """__del__() is unreliable in Tango; use delete_device() to release resources."""
+
+    code = "T043"
+    severity = "warning"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if ctx.in_device_class and node.name == '__del__':
+            yield node, (
+                f"Device class '{ctx.current_class}' defines __del__(); "
+                "use delete_device() to release resources instead"
+            )
+
+class T044_AttributeMissingLabel(ASTRule):
+    """Tango @attribute should have a 'label' parameter for the control-system UI."""
+
+    code = "T044"
+    severity = "info"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if ctx.is_tango_attribute and 'label' not in ctx.attribute_config:
+            yield node, f"Attribute '{node.name}' should have a 'label' parameter"
+
+class T045_ReadWriteMissingWriter(ASTRule):
+    """READ_WRITE @attribute should have a corresponding write_<name>() method."""
+
+    code = "T045"
+    severity = "warning"
+    handles = (ast.ClassDef,)
+
+    def check(self, node: ast.ClassDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class:
+            return
+        method_names = {
+            item.name
+            for item in node.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        for item in node.body:
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for dec in item.decorator_list:
+                if _has_read_write_access(dec):
+                    write_name = f'write_{item.name}'
+                    if write_name not in method_names:
+                        yield item, (
+                            f"READ_WRITE attribute '{item.name}' is missing "
+                            f"'{write_name}()' method"
+                        )
+
+class T046_SleepInDevice(ASTRule):
+    """time.sleep() inside a device method blocks the Tango event loop."""
+
+    code = "T046"
+    severity = "warning"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class:
+            return
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            name = get_name(child.func)
+            if name in ('sleep', 'time.sleep'):
+                yield child, (
+                    f"time.sleep() in '{node.name}' blocks the Tango event loop; "
+                    "use a non-blocking approach or green mode"
+                )
+                return  # one warning per function is enough
+
+
+class T047_ThreadingInDevice(ASTRule):
+    """threading.Thread in a device class; prefer Tango green mode or DeviceThread."""
+
+    code = "T047"
+    severity = "warning"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.in_device_class:
+            return
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            name = get_name(child.func)
+            if 'Thread' in name and ('threading' in name or name == 'Thread'):
+                yield child, (
+                    f"threading.Thread in '{node.name}'; "
+                    "prefer Tango green mode or tango.utils.DeviceThread"
+                )
+                return
+
+class T049_CommandMissingDtypes(ASTRule):
+    """@command with arguments or a return value should declare dtype_in / dtype_out."""
+
+    code = "T049"
+    severity = "info"
+    handles = (ast.FunctionDef,)
+
+    def check(self, node: ast.FunctionDef, ctx: RuleContext):  # type: ignore[override]
+        if not ctx.is_tango_command:
+            return
+
+        # Resolve the command decorator's kwargs from the node directly,
+        # since ctx.attribute_config is only populated for @attribute.
+        cmd_kwargs: dict = {}
+        for dec in node.decorator_list:
+            info = get_decorator_info(dec)
+            if info and 'command' in info[0]:
+                cmd_kwargs = info[1]
+                break
+
+        n_params = len(node.args.args) - 1  # subtract self
+        if n_params > 0 and 'dtype_in' not in cmd_kwargs:
+            yield node, (
+                f"Command '{node.name}' takes arguments but is missing 'dtype_in' declaration"
+            )
+        if node.returns is not None and 'dtype_out' not in cmd_kwargs:
+            yield node, (
+                f"Command '{node.name}' has a return annotation but is missing 'dtype_out' declaration"
+            )
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # 

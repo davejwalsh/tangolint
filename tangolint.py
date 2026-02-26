@@ -160,11 +160,6 @@ class TangoLinter(ast.NodeVisitor):
         self._run(node, self._ctx())
         ast.NodeVisitor.generic_visit(self, node)
 
-DEBUG_LOG = Path("/tmp/tangolint_debug.log")
-
-def _dbg(*args) -> None:
-    with DEBUG_LOG.open("a") as f:
-        print(*args, file=f)
 
 def _parse_noqa(source: str) -> dict[int, set[str] | None]:
     """Parse noqa annotations.
@@ -225,7 +220,6 @@ def run_ruff(ruff_cmd: list[str], filepath: Path) -> list[LintIssue]:
                 )
             return issues
         except Exception as e:
-            _dbg(f"  run_ruff exception: {e}")
             return []
 
 
@@ -234,8 +228,6 @@ def run_mypy(mypy_cmd: list[str], filepath: Path) -> list[LintIssue]:
         result = run_tool(
             [*mypy_cmd, str(filepath), "--show-error-codes", "--no-color-output"]
         )
-        _dbg(f"  mypy stdout: {result.stdout[:300]}")
-        _dbg(f"  mypy stderr: {result.stderr[:200]}")
 
         issues = []
         target = str(filepath.resolve())
@@ -275,7 +267,6 @@ def run_mypy(mypy_cmd: list[str], filepath: Path) -> list[LintIssue]:
             )
         return issues
     except Exception as e:
-        _dbg(f"  run_mypy exception: {e}")
         return []
 
 def lint_file(
@@ -293,19 +284,14 @@ def lint_file(
         linter = TangoLinter(str(filepath), disabled_rules=disabled)
         linter.visit(tree)
 
-        _dbg(f"  has_tango_import={linter.has_tango_import}")
-
         if not linter.has_tango_import: #This ain't be tango
             diagnostics = []
             if mypy_cmd:
                 mypy_issues = run_mypy(mypy_cmd, filepath)
-                _dbg(f"  mypy returned {len(mypy_issues)} issues")
                 diagnostics += mypy_issues
             if ruff_cmd:
                 ruff_issues = run_ruff(ruff_cmd, filepath)
-                _dbg(f"  ruff returned {len(ruff_issues)} issues")
                 diagnostics += ruff_issues
-            _dbg(f"  returning {len(diagnostics)} total issues")
             return diagnostics
 
         source_issues: list[LintIssue] = []
@@ -450,8 +436,6 @@ def main() -> int:
     """Main entry point for the linter."""
     ruff_cmd = _tool_cmd('ruff')
     mypy_cmd = _tool_cmd('mypy')
-    _dbg(f"=== tangolint main: sys.executable={sys.executable}")
-    _dbg(f"  ruff_cmd={ruff_cmd}  mypy_cmd={mypy_cmd}")
     if not ruff_cmd:
         print("Warning: ruff not found — ruff checks will be skipped.")
     if not mypy_cmd:
