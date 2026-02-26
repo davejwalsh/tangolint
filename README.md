@@ -2,7 +2,10 @@
 
 A linter for PyTango that avoids the annoying complaints
 from mypy/ruff etc, and adds some hopefully useful Tango
-specific linting hints
+specific linting hints.
+
+For non-Tango files, it attempts to lint using ``ruff``
+and ``mypy``
 
 ---
 
@@ -10,12 +13,11 @@ specific linting hints
 
 ### VS Code extension (recommended)
 
-1. Download `pytangolint-0.1.0.vsix` from https://github.com/davejwalsh/tangolint/releases .
+1. Download and extract the latest https://github.com/davejwalsh/tangolint/releases .
+2. Extract the files somewhere.
 2. Open VS Code / Extensions panel (`Ctrl+Shift+X`) 
 3. Click the three dots menu and select 'Install from VSIX'
-3. Select the downloaded file and reload the window.
-
-The extension is self-contained — no Python packages to install.
+3. Select the downloaded `tangolint-0.1.0.vsix` file from your download location and reload the window.
 
 ### CLI
 
